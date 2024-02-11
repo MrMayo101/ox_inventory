@@ -1,18 +1,54 @@
 //import { Items } from "../store/items";
-import { Inventory, State, Slot, SlotWithItem, InventoryType, ItemData } from '../typings';
+import { Inventory, InventoryType, ItemData, Slot, SlotWithItem, State } from '../typings';
 import { isEqual } from 'lodash';
 import { store } from '../store';
 import { Items } from '../store/items';
 import { imagepath } from '../store/imagepath';
 import { fetchNui } from '../utils/fetchNui';
 
-export const isShopStockEmpty = (itemCount: number | undefined, inventoryType: string) => {
-  if (inventoryType === 'shop' && itemCount !== undefined && itemCount === 0) return true;
+export const canPurchaseItem = (item: Slot, inventory: { type: Inventory['type']; groups: Inventory['groups'] }) => {
+  if (inventory.type !== 'shop' || !isSlotWithItem(item)) return true;
 
-  return false;
+  if (item.count !== undefined && item.count === 0) return false;
+
+  if (item.grade === undefined || !inventory.groups) return true;
+
+  const leftInventory = store.getState().inventory.leftInventory;
+
+  // Shop requires groups but player has none
+  if (!leftInventory.groups) return false;
+
+  const reqGroups = Object.keys(inventory.groups);
+
+  if (Array.isArray(item.grade)) {
+    for (let i = 0; i < reqGroups.length; i++) {
+      const reqGroup = reqGroups[i];
+
+      if (leftInventory.groups[reqGroup] !== undefined) {
+        const playerGrade = leftInventory.groups[reqGroup];
+        for (let j = 0; j < item.grade.length; j++) {
+          const reqGrade = item.grade[j];
+
+          if (playerGrade === reqGrade) return true;
+        }
+      }
+    }
+
+    return false;
+  } else {
+    for (let i = 0; i < reqGroups.length; i++) {
+      const reqGroup = reqGroups[i];
+      if (leftInventory.groups[reqGroup] !== undefined) {
+        const playerGrade = leftInventory.groups[reqGroup];
+
+        if (playerGrade >= item.grade) return true;
+      }
+    }
+
+    return false;
+  }
 };
 
-// I hate this
 export const canCraftItem = (item: Slot, inventoryType: string) => {
   if (!isSlotWithItem(item) || inventoryType !== 'crafting') return true;
   if (!item.ingredients) return true;
@@ -21,10 +57,10 @@ export const canCraftItem = (item: Slot, inventoryType: string) => {
 
   const remainingItems = ingredientItems.filter((ingredient) => {
     const [item, count] = [ingredient[0], ingredient[1]];
+    const globalItem = Items[item];
 
     if (count >= 1) {
-      // @ts-ignore
-      if (Items[item] && Items[item].count >= count) return false;
+      if (globalItem && globalItem.count >= count) return false;
     }
 
     const hasItem = leftInventory.items.find((playerItem) => {
@@ -97,24 +133,31 @@ export const getItemData = async (itemName: string) => {
   const resp: ItemData | null = await fetchNui('getItemData', itemName);
 
   if (resp?.name) {
-    Items[itemName] = resp
-    return resp
+    Items[itemName] = resp;
+    return resp;
   }
 };
 
-export const getItemUrl = (item: SlotWithItem) => {
-  const metadata = item.metadata;
+export const getItemUrl = (item: string | SlotWithItem) => {
+  const isObj = typeof item === 'object';
 
-  // @todo validate urls and support webp
-  if (metadata?.imageurl) return `url(${metadata.imageurl})`;
-  if (metadata?.image) return `url(${imagepath}/${metadata.image}.png)`;
+  if (isObj) {
+    if (!item.name) return;
 
-  const itemData = Items[item.name];
+    const metadata = item.metadata;
 
-  if (!itemData) return `url(${imagepath}/${item.name}.png)`;
+    // @todo validate urls and support webp
+    if (metadata?.imageurl) return `${metadata.imageurl}`;
+    if (metadata?.image) return `${imagepath}/${metadata.image}.png`;
+  }
+
+  const itemName = isObj ? (item.name as string) : item;
+  const itemData = Items[itemName];
+
+  if (!itemData) return `${imagepath}/${itemName}.png`;
   if (itemData.image) return itemData.image;
 
-  itemData.image = `url(${imagepath}/${item.name}.png)`;
+  itemData.image = `${imagepath}/${itemName}.png`;
 
   return itemData.image;
 };

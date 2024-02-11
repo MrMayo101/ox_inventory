@@ -2,12 +2,12 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { TransitionGroup } from 'react-transition-group';
 import useNuiEvent from '../../hooks/useNuiEvent';
-import { Fade } from '@mui/material';
 import useQueue from '../../hooks/useQueue';
 import { Locale } from '../../store/locale';
 import { getItemUrl } from '../../helpers';
 import { SlotWithItem } from '../../typings';
 import { Items } from '../../store/items';
+import Fade from './transitions/Fade';
 
 interface ItemNotificationProps {
   item: SlotWithItem;
@@ -32,7 +32,7 @@ const ItemNotification = React.forwardRef(
       <div
         className="item-notification-item-box"
         style={{
-          backgroundImage: getItemUrl(slotItem) || 'none',
+          backgroundImage: `url(${getItemUrl(slotItem) || 'none'}`,
           ...props.style,
         }}
         ref={ref}
